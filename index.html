@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bluesky Feed</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #eef3f8;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: auto;
+    }
+
+    .post {
+      display: flex;
+      gap: 10px;
+      background: white;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-size: cover;
+    }
+
+    .content {
+      flex: 1;
+    }
+
+    .author {
+      font-weight: bold;
+    }
+
+    .handle {
+      color: gray;
+      font-size: 13px;
+    }
+
+    .text {
+      margin: 5px 0;
+      white-space: pre-wrap;
+    }
+
+    .time {
+      font-size: 12px;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Custom Bluesky Feed</h2>
+  <div id="feed"></div>
+</div>
+
+<script>
+const users = [
+  "bsky.app",
+  "jay.bsky.team"
+];
+
+let renderedIds = new Set();
+
+async function fetchFeed(user) {
+  const url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${user}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  return data.feed.map(item => ({
+    id: item.post.uri,
+    author: item.post.author.displayName || item.post.author.handle,
+    handle: item.post.author.handle,
+    avatar: item.post.author.avatar,
+    text: item.post.record.text,
+    time: item.post.record.createdAt
+  }));
+}
+
+async function loadFeed() {
+  let allPosts = [];
+
+  for (let user of users) {
+    try {
+      const posts = await fetchFeed(user);
+      allPosts = allPosts.concat(posts);
+    } catch (e) {
+      console.error("Error loading", user);
+    }
+  }
+
+  allPosts.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+  const feedDiv = document.getElementById("feed");
+  feedDiv.innerHTML = "";
+
+  allPosts.forEach(post => {
+    if (renderedIds.has(post.id)) return;
+    renderedIds.add(post.id);
+
+    const div = document.createElement("div");
+    div.className = "post";
+
+    div.innerHTML = `
+      <div class="avatar" style="background-image:url('${post.avatar}')"></div>
+      <div class="content">
+        <div class="author">${post.author}</div>
+        <div class="handle">@${post.handle}</div>
+        <div class="text">${post.text}</div>
+        <div class="time">${new Date(post.time).toLocaleString()}</div>
+      </div>
+    `;
+
+    feedDiv.appendChild(div);
+  });
+}
+
+// initial load
+loadFeed();
+
+// auto refresh every 60s
+setInterval(loadFeed, 60000);
+</script>
+
+</body>
+</html>
