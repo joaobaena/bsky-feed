@@ -1,135 +1,197 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Bluesky Feed</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #eef3f8;
-      margin: 0;
-      padding: 20px;
-    }
+<meta charset="UTF-8">
+<title>Bluesky Feed</title>
 
-    .container {
-      max-width: 600px;
-      margin: auto;
-    }
+<style>
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #eef3f8;
+  margin: 0;
+}
 
-    .post {
-      display: flex;
-      gap: 10px;
-      background: white;
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 10px;
-      border: 1px solid #ddd;
-    }
+.container {
+  max-width: 600px;
+  margin: auto;
+}
 
-    .avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background-size: cover;
-    }
+.header {
+  padding: 15px;
+  font-size: 20px;
+  font-weight: bold;
+  background: white;
+  border-bottom: 1px solid #ddd;
+  position: sticky;
+  top: 0;
+}
 
-    .content {
-      flex: 1;
-    }
+input {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-bottom: 1px solid #ddd;
+  outline: none;
+}
 
-    .author {
-      font-weight: bold;
-    }
+.post {
+  display: flex;
+  gap: 10px;
+  background: white;
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+}
 
-    .handle {
-      color: gray;
-      font-size: 13px;
-    }
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-size: cover;
+}
 
-    .text {
-      margin: 5px 0;
-      white-space: pre-wrap;
-    }
+.content { flex: 1; }
 
-    .time {
-      font-size: 12px;
-      color: gray;
-    }
-  </style>
+.topline {
+  display: flex;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.author { font-weight: bold; }
+.handle, .time { color: gray; }
+
+.text {
+  margin: 6px 0;
+  white-space: pre-wrap;
+}
+
+img.embed {
+  width: 100%;
+  border-radius: 10px;
+  margin-top: 5px;
+}
+
+.actions {
+  display: flex;
+  gap: 15px;
+  font-size: 13px;
+  color: gray;
+  margin-top: 6px;
+}
+</style>
 </head>
+
 <body>
 
 <div class="container">
-  <h2>Custom Bluesky Feed</h2>
+  <div class="header">Custom Bluesky Feed</div>
+  <input id="filter" placeholder="Filter posts..." />
   <div id="feed"></div>
 </div>
 
 <script>
 const users = [
-  "bsky.app",
-  "jay.bsky.team"
+  "viniciusduarte.bsky.social",
+  "judeuateu.bsky.social",
+  "caioalmendra.bsky.social",
+  "carapanarana.bsky.social",
+  "sk-serge.bsky.social",
+  "osrjacinto.bsky.social"
 ];
 
-let renderedIds = new Set();
+let postsMap = new Map();
 
 async function fetchFeed(user) {
   const url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${user}`;
   const res = await fetch(url);
   const data = await res.json();
 
-  return data.feed.map(item => ({
-    id: item.post.uri,
-    author: item.post.author.displayName || item.post.author.handle,
-    handle: item.post.author.handle,
-    avatar: item.post.author.avatar,
-    text: item.post.record.text,
-    time: item.post.record.createdAt
-  }));
-}
-
-async function loadFeed() {
-  let allPosts = [];
-
-  for (let user of users) {
-    try {
-      const posts = await fetchFeed(user);
-      allPosts = allPosts.concat(posts);
-    } catch (e) {
-      console.error("Error loading", user);
-    }
-  }
-
-  allPosts.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-  const feedDiv = document.getElementById("feed");
-  feedDiv.innerHTML = "";
-
-  allPosts.forEach(post => {
-    if (renderedIds.has(post.id)) return;
-    renderedIds.add(post.id);
-
-    const div = document.createElement("div");
-    div.className = "post";
-
-    div.innerHTML = `
-      <div class="avatar" style="background-image:url('${post.avatar}')"></div>
-      <div class="content">
-        <div class="author">${post.author}</div>
-        <div class="handle">@${post.handle}</div>
-        <div class="text">${post.text}</div>
-        <div class="time">${new Date(post.time).toLocaleString()}</div>
-      </div>
-    `;
-
-    feedDiv.appendChild(div);
+  return data.feed.map(item => {
+    const p = item.post;
+    return {
+      id: p.uri,
+      author: p.author.displayName || p.author.handle,
+      handle: p.author.handle,
+      avatar: p.author.avatar,
+      text: p.record.text,
+      time: p.record.createdAt,
+      likes: p.likeCount || 0,
+      reposts: p.repostCount || 0,
+      replyCount: p.replyCount || 0,
+      images: p.embed?.images?.map(img => img.fullsize) || []
+    };
   });
 }
 
-// initial load
-loadFeed();
+function renderPost(post) {
+  const div = document.createElement("div");
+  div.className = "post";
 
-// auto refresh every 60s
-setInterval(loadFeed, 60000);
+  div.innerHTML = `
+    <div class="avatar" style="background-image:url('${post.avatar}')"></div>
+    <div class="content">
+      <div class="topline">
+        <span class="author">${post.author}</span>
+        <span class="handle">@${post.handle}</span>
+        <span class="time">· ${new Date(post.time).toLocaleTimeString()}</span>
+      </div>
+
+      <div class="text">${post.text}</div>
+
+      ${post.images.map(img => `<img class="embed" src="${img}">`).join("")}
+
+      <div class="actions">
+        💬 ${post.replyCount}
+        🔁 ${post.reposts}
+        ❤️ ${post.likes}
+      </div>
+    </div>
+  `;
+
+  return div;
+}
+
+function updateFeed(newPosts) {
+  const feed = document.getElementById("feed");
+  const filterText = document.getElementById("filter").value.toLowerCase();
+
+  newPosts.forEach(post => {
+    if (postsMap.has(post.id)) return;
+
+    postsMap.set(post.id, post);
+
+    if (filterText && !post.text.toLowerCase().includes(filterText)) return;
+
+    const el = renderPost(post);
+    feed.prepend(el);
+  });
+}
+
+async function refresh() {
+  let all = [];
+
+  for (let u of users) {
+    try {
+      const posts = await fetchFeed(u);
+      all = all.concat(posts);
+    } catch {}
+  }
+
+  all.sort((a,b)=> new Date(b.time)-new Date(a.time));
+
+  updateFeed(all);
+}
+
+// filter live
+document.getElementById("filter").addEventListener("input", () => {
+  document.getElementById("feed").innerHTML = "";
+  postsMap.clear();
+  refresh();
+});
+
+// initial + auto refresh
+refresh();
+setInterval(refresh, 45000);
 </script>
 
 </body>
