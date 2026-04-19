@@ -40,6 +40,11 @@ input {
   background: white;
   padding: 12px;
   border-bottom: 1px solid #ddd;
+  cursor: pointer;
+}
+
+.post:hover {
+  background: #f5f8fa;
 }
 
 .avatar {
@@ -53,8 +58,9 @@ input {
 
 .topline {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   font-size: 14px;
+  flex-wrap: wrap;
 }
 
 .author { font-weight: bold; }
@@ -78,6 +84,18 @@ img.embed {
   color: gray;
   margin-top: 6px;
 }
+
+.label {
+  font-size: 12px;
+  color: gray;
+  margin-bottom: 4px;
+}
+
+.thread {
+  margin-left: 50px;
+  border-left: 2px solid #ddd;
+  padding-left: 10px;
+}
 </style>
 </head>
 
@@ -96,7 +114,9 @@ const users = [
   "caioalmendra.bsky.social",
   "carapanarana.bsky.social",
   "sk-serge.bsky.social",
-  "osrjacinto.bsky.social"
+  "osrjacinto.bsky.social",
+  "helldude.bsky.social",
+  "shaunvids.bsky.social"
 ];
 
 let postsMap = new Map();
@@ -108,32 +128,59 @@ async function fetchFeed(user) {
 
   return data.feed.map(item => {
     const p = item.post;
+
     return {
       id: p.uri,
+      uri: p.uri,
+      cid: p.cid,
+
       author: p.author.displayName || p.author.handle,
       handle: p.author.handle,
       avatar: p.author.avatar,
+
       text: p.record.text,
       time: p.record.createdAt,
+
       likes: p.likeCount || 0,
       reposts: p.repostCount || 0,
       replyCount: p.replyCount || 0,
-      images: p.embed?.images?.map(img => img.fullsize) || []
+
+      images: p.embed?.images?.map(img => img.fullsize) || [],
+
+      isRepost: !!item.reason,
+      repostedBy: item.reason?.by?.displayName || item.reason?.by?.handle || null,
+
+      isReply: !!item.reply,
+      replyTo: item.reply?.parent?.author?.handle || null
     };
   });
+}
+
+function postURL(post) {
+  const parts = post.uri.split("/");
+  const rkey = parts[parts.length - 1];
+  return `https://bsky.app/profile/${post.handle}/post/${rkey}`;
 }
 
 function renderPost(post) {
   const div = document.createElement("div");
   div.className = "post";
 
+  div.onclick = () => window.open(postURL(post), "_blank");
+
   div.innerHTML = `
     <div class="avatar" style="background-image:url('${post.avatar}')"></div>
+
     <div class="content">
+
+      ${post.isRepost ? `<div class="label">🔁 ${post.repostedBy} reposted</div>` : ""}
+
+      ${post.isReply ? `<div class="label">↩ replying to @${post.replyTo}</div>` : ""}
+
       <div class="topline">
         <span class="author">${post.author}</span>
         <span class="handle">@${post.handle}</span>
-        <span class="time">· ${new Date(post.time).toLocaleTimeString()}</span>
+        <span class="time">· ${new Date(post.time).toLocaleString()}</span>
       </div>
 
       <div class="text">${post.text}</div>
@@ -144,9 +191,48 @@ function renderPost(post) {
         💬 ${post.replyCount}
         🔁 ${post.reposts}
         ❤️ ${post.likes}
+        <span class="expand" data-uri="${post.uri}">🧵 View thread</span>
       </div>
+
+      <div class="thread" id="thread-${post.id}"></div>
     </div>
   `;
+
+  // thread loader
+  div.querySelector(".expand").onclick = async (e) => {
+    e.stopPropagation();
+
+    const container = div.querySelector(`#thread-${post.id}`);
+    if (container.innerHTML) {
+      container.innerHTML = "";
+      return;
+    }
+
+    const url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${post.uri}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const replies = data.thread?.replies || [];
+
+    replies.forEach(r => {
+      const rp = r.post;
+      const el = document.createElement("div");
+      el.className = "post";
+
+      el.innerHTML = `
+        <div class="avatar" style="background-image:url('${rp.author.avatar}')"></div>
+        <div class="content">
+          <div class="topline">
+            <span class="author">${rp.author.displayName || rp.author.handle}</span>
+            <span class="handle">@${rp.author.handle}</span>
+          </div>
+          <div class="text">${rp.record.text}</div>
+        </div>
+      `;
+
+      container.appendChild(el);
+    });
+  };
 
   return div;
 }
@@ -178,18 +264,17 @@ async function refresh() {
   }
 
   all.sort((a,b)=> new Date(b.time)-new Date(a.time));
-
   updateFeed(all);
 }
 
-// filter live
+// filter
 document.getElementById("filter").addEventListener("input", () => {
   document.getElementById("feed").innerHTML = "";
   postsMap.clear();
   refresh();
 });
 
-// initial + auto refresh
+// init
 refresh();
 setInterval(refresh, 45000);
 </script>
