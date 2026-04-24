@@ -111,18 +111,7 @@ img.embed {
 </div>
 
 <script>
-let users = JSON.parse(localStorage.getItem("users")) || [
-  "viniciusduarte.bsky.social",
-  "judeuateu.bsky.social",
-  "caioalmendra.bsky.social",
-  "carapanarana.bsky.social",
-  "sk-serge.bsky.social",
-  "osrjacinto.bsky.social",
-  "helldude.bsky.social",
-  "shaunvids.bsky.social",
-  "arnaldobranco.bsky.social",
-  "laranjadinho.deichator.ar"
-];
+let users = JSON.parse(localStorage.getItem("users")) || [];
 document.getElementById("accounts").value = users.join(",");
 
 let postsMap = new Map();
